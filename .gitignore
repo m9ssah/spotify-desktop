@@ -1,6 +1,7 @@
 # .NET build output
 bin/
 obj/
+app_debug.log
 
 # Visual Studio
 .vs/
