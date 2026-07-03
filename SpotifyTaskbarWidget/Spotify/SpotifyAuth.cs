@@ -23,7 +23,8 @@ public class SpotifyAuth
     {
         "user-read-playback-state",
         "user-modify-playback-state",
-        "user-read-currently-playing"
+        "user-read-currently-playing",
+        "user-read-private"
     };
 
     private readonly string _clientId;
@@ -37,6 +38,11 @@ public class SpotifyAuth
         _clientId = clientId;
         _tokenStore = tokenStore;
         _httpClient = httpClient ?? new HttpClient();
+        
+        if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
+        {
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("SpotifyTaskbarWidget/1.0 (Windows NT 10.0; Win64; x64)");
+        }
     }
 
     /// <summary>
@@ -84,19 +90,20 @@ public class SpotifyAuth
                            $"&scope={Uri.EscapeDataString(string.Join(" ", Scopes))}" +
                            $"&state={state}" +
                            $"&code_challenge_method=S256" +
-                           $"&code_challenge={codeChallenge}";
+                           $"&code_challenge={codeChallenge}" +
+                           $"&show_dialog=true";
 
         // Start the localhost HTTP listener BEFORE opening the browser
         var authCode = await ListenForCallbackAsync(state, cancellationToken, () =>
         {
             // Open system browser
             Process.Start(new ProcessStartInfo(authorizeUri) { UseShellExecute = true });
-            Debug.WriteLine("[SpotifyAuth] Opened browser for authorization.");
+            Logger.Log("[SpotifyAuth] Opened browser for authorization.");
         });
 
         if (string.IsNullOrEmpty(authCode))
         {
-            Debug.WriteLine("[SpotifyAuth] No auth code received.");
+            Logger.Log("[SpotifyAuth] No auth code received.");
             return null;
         }
 
@@ -123,7 +130,7 @@ public class SpotifyAuth
             if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
-                Debug.WriteLine($"[SpotifyAuth] Token refresh failed: {response.StatusCode} - {error}");
+                Logger.Log($"[SpotifyAuth] Token refresh failed: {response.StatusCode} - {error}");
                 return null;
             }
 
@@ -142,12 +149,12 @@ public class SpotifyAuth
             };
 
             _tokenStore.Save(tokens);
-            Debug.WriteLine("[SpotifyAuth] Token refreshed successfully.");
+            Logger.Log("[SpotifyAuth] Token refreshed successfully.");
             return tokens;
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[SpotifyAuth] Token refresh exception: {ex.Message}");
+            Logger.Log($"[SpotifyAuth] Token refresh exception: {ex.Message}");
             return null;
         }
     }
@@ -166,7 +173,7 @@ public class SpotifyAuth
         try
         {
             listener.Start();
-            Debug.WriteLine("[SpotifyAuth] Listening for callback on http://localhost:5543/");
+            Logger.Log("[SpotifyAuth] Listening for callback on http://127.0.0.1:5543/");
 
             // Notify caller that the listener is ready (trigger browser open)
             onListenerReady();
@@ -192,13 +199,13 @@ public class SpotifyAuth
                 responseHtml = "<html><body><h2>Authentication Failed</h2>" +
                                $"<p>Error: {error}</p>" +
                                "<p>You can close this tab.</p></body></html>";
-                Debug.WriteLine($"[SpotifyAuth] Auth error: {error}");
+                Logger.Log($"[SpotifyAuth] Auth error: {error}");
             }
             else if (state != expectedState)
             {
                 responseHtml = "<html><body><h2>Authentication Failed</h2>" +
                                "<p>State mismatch — possible CSRF attack.</p></body></html>";
-                Debug.WriteLine("[SpotifyAuth] State mismatch.");
+                Logger.Log("[SpotifyAuth] State mismatch.");
                 code = null;
             }
             else
@@ -218,7 +225,7 @@ public class SpotifyAuth
         }
         catch (OperationCanceledException)
         {
-            Debug.WriteLine("[SpotifyAuth] Callback listener timed out or was cancelled.");
+            Logger.Log("[SpotifyAuth] Callback listener timed out or was cancelled.");
             return null;
         }
         finally
@@ -246,7 +253,7 @@ public class SpotifyAuth
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync();
-            Debug.WriteLine($"[SpotifyAuth] Token exchange failed: {response.StatusCode} - {error}");
+            Logger.Log($"[SpotifyAuth] Token exchange failed: {response.StatusCode} - {error}");
             return null;
         }
 
@@ -264,7 +271,7 @@ public class SpotifyAuth
         };
 
         _tokenStore.Save(tokens);
-        Debug.WriteLine("[SpotifyAuth] Tokens exchanged and saved successfully.");
+        Logger.Log($"[SpotifyAuth] Tokens exchanged and saved successfully. Scopes returned: {tokenResponse.Scope ?? "none"}");
         return tokens;
     }
 
@@ -309,4 +316,7 @@ internal class SpotifyTokenResponse
 
     [System.Text.Json.Serialization.JsonPropertyName("token_type")]
     public string? TokenType { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("scope")]
+    public string? Scope { get; set; }
 }

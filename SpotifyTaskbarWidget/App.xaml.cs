@@ -34,6 +34,7 @@ public partial class App : Application
     private SpotifyAuth? _spotifyAuth;
     private TokenStore? _tokenStore;
     private Window? _widgetWindow;
+    private Window? _dummyWindow;
     private WidgetViewModel? _viewModel;
     private HttpClient? _httpClient;
 
@@ -70,6 +71,7 @@ public partial class App : Application
     {
         // ── Initialize Services ──────────────────────────────────────
         _httpClient = new HttpClient();
+        _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("SpotifyTaskbarWidget/1.0 (Windows NT 10.0; Win64; x64)");
         _tokenStore = new TokenStore();
         _spotifyAuth = new SpotifyAuth(SpotifyClientId, _tokenStore, _httpClient);
         _startupService = new StartupService();
@@ -98,11 +100,44 @@ public partial class App : Application
         // ── Initialize Spotify Client ────────────────────────────────
         _spotifyClient = new SpotifyClient(_spotifyAuth, tokens, _httpClient);
 
+        // ── Log User Profile for Diagnostics ─────────────────────────
+        try
+        {
+            var profile = await _spotifyClient.GetUserProfileAsync();
+            if (profile != null)
+            {
+                Logger.Log($"[App] Authorized User: ID={profile.Id}, Name={profile.DisplayName}, Product={profile.Product ?? "unknown"}");
+            }
+            else
+            {
+                Logger.Log("[App] Failed to fetch authorized user profile.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[App] User profile fetch exception: {ex.Message}");
+        }
+
         // ── Initialize Polling ───────────────────────────────────────
         _pollingService = new PlaybackPollingService(_spotifyClient);
 
         // ── Create ViewModel ─────────────────────────────────────────
         _viewModel = new WidgetViewModel(_spotifyClient, _pollingService);
+
+        // ── Create Dummy Window for Tray Icon Focus ──────────────────
+        _dummyWindow = new Window
+        {
+            Width = 0,
+            Height = 0,
+            WindowStyle = WindowStyle.None,
+            ShowInTaskbar = false,
+            AllowsTransparency = true,
+            Background = System.Windows.Media.Brushes.Transparent,
+            Left = -9999,
+            Top = -9999,
+        };
+        _dummyWindow.Show();
+        MainWindow = _dummyWindow;
 
         // ── Create Widget Window ─────────────────────────────────────
         _widgetWindow = CreateWidgetWindow();
@@ -191,7 +226,8 @@ public partial class App : Application
 
     private void SetupTrayIcon()
     {
-        _trayIcon = new TaskbarNotificationIcon();
+        if (_dummyWindow == null) return;
+        _trayIcon = new TaskbarNotificationIcon(_dummyWindow);
 
         // Context menu
         var contextMenu = new ContextMenu();
@@ -294,6 +330,7 @@ public partial class App : Application
         _singleInstanceMutex?.ReleaseMutex();
         _singleInstanceMutex?.Dispose();
         _widgetWindow?.Close();
+        _dummyWindow?.Close();
 
         base.OnExit(e);
     }
@@ -307,9 +344,23 @@ internal class TaskbarNotificationIcon : IDisposable
 {
     private readonly TaskbarIcon _icon;
 
-    public TaskbarNotificationIcon()
+    public TaskbarNotificationIcon(Window owner)
     {
         _icon = new TaskbarIcon();
+
+        // Attach the TaskbarIcon to the dummy window's visual tree.
+        // This gives the tray ContextMenu a valid top-level window parent
+        // so it can receive focus properly and won't flash/close instantly.
+        if (owner.Content is Panel panel)
+        {
+            panel.Children.Add(_icon);
+        }
+        else
+        {
+            var grid = new Grid();
+            grid.Children.Add(_icon);
+            owner.Content = grid;
+        }
 
         // Try to load custom icon via WPF ImageSource
         try

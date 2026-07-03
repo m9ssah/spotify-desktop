@@ -25,7 +25,7 @@ public class PlaybackPollingService : IDisposable
 
     private readonly SpotifyClient _client;
     private readonly DispatcherTimer _timer;
-    private PollingState _currentState = PollingState.Idle;
+    private PollingState _currentState = (PollingState)(-1);
     private int _consecutiveErrors;
     private PlaybackState? _lastPlaybackState;
     private bool _isRunning;
@@ -77,7 +77,7 @@ public class PlaybackPollingService : IDisposable
     {
         _isRunning = false;
         _timer.Stop();
-        Debug.WriteLine("[Polling] Stopped.");
+        Logger.Log("[Polling] Stopped.");
     }
 
     /// <summary>
@@ -127,7 +127,7 @@ public class PlaybackPollingService : IDisposable
             {
                 _currentState = newPollingState;
                 _timer.Interval = GetIntervalForState(newPollingState);
-                Debug.WriteLine($"[Polling] State → {newPollingState}, Interval → {_timer.Interval.TotalSeconds}s");
+                Logger.Log($"[Polling] State → {newPollingState}, Interval → {_timer.Interval.TotalSeconds}s");
             }
 
             // Notify listeners if playback state meaningfully changed
@@ -139,7 +139,7 @@ public class PlaybackPollingService : IDisposable
         catch (Exception ex)
         {
             _consecutiveErrors++;
-            Debug.WriteLine($"[Polling] Error #{_consecutiveErrors}: {ex.Message}");
+            Logger.Log($"[Polling] Error #{_consecutiveErrors}: {ex.Message}");
 
             if (_consecutiveErrors >= 5)
             {

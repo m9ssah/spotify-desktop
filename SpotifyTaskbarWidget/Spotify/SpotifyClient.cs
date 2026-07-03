@@ -24,6 +24,11 @@ public class SpotifyClient
         _auth = auth;
         _tokens = initialTokens;
         _httpClient = httpClient ?? new HttpClient();
+        
+        if (_httpClient.DefaultRequestHeaders.UserAgent.Count == 0)
+        {
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("SpotifyTaskbarWidget/1.0 (Windows NT 10.0; Win64; x64)");
+        }
     }
 
     /// <summary>
@@ -41,10 +46,6 @@ public class SpotifyClient
 
     // ─── Playback State ──────────────────────────────────────────────────
 
-    /// <summary>
-    /// Gets the current playback state from Spotify.
-    /// Returns null if no active playback session or on error.
-    /// </summary>
     public async Task<PlaybackState?> GetCurrentPlaybackAsync()
     {
         try
@@ -60,7 +61,14 @@ public class SpotifyClient
 
             if (!response.IsSuccessStatusCode)
             {
-                Debug.WriteLine($"[SpotifyClient] GetPlayback failed: {response.StatusCode}");
+                Logger.Log($"[SpotifyClient] GetPlayback failed: {response.StatusCode}");
+                
+                if (response.StatusCode == HttpStatusCode.Forbidden)
+                {
+                    Logger.Log("[SpotifyClient] Got 403 Forbidden on player state. Retrying with /currently-playing fallback...");
+                    return await GetCurrentlyPlayingOnlyAsync();
+                }
+
                 return null;
             }
 
@@ -74,7 +82,43 @@ public class SpotifyClient
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"[SpotifyClient] GetPlayback exception: {ex.Message}");
+            Logger.Log($"[SpotifyClient] GetPlayback exception: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Fallback to get only the currently playing track (supported for Free accounts).
+    /// </summary>
+    private async Task<PlaybackState?> GetCurrentlyPlayingOnlyAsync()
+    {
+        try
+        {
+            var response = await SendAuthenticatedRequestAsync(HttpMethod.Get, "/me/player/currently-playing");
+
+            if (response == null)
+                return null;
+
+            if (response.StatusCode == HttpStatusCode.NoContent)
+                return null;
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Logger.Log($"[SpotifyClient] GetCurrentlyPlayingOnly failed: {response.StatusCode}");
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var apiResponse = JsonSerializer.Deserialize<SpotifyPlaybackResponse>(json);
+
+            if (apiResponse == null)
+                return null;
+
+            return PlaybackState.FromApiResponse(apiResponse);
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[SpotifyClient] GetCurrentlyPlayingOnly exception: {ex.Message}");
             return null;
         }
     }
@@ -164,7 +208,7 @@ public class SpotifyClient
             // Handle 401 — token expired mid-request
             if (response.StatusCode == HttpStatusCode.Unauthorized && !isRetry)
             {
-                Debug.WriteLine("[SpotifyClient] Got 401, refreshing token...");
+                Logger.Log("[SpotifyClient] Got 401, refreshing token...");
                 await RefreshTokensAsync();
                 return await SendAuthenticatedRequestAsync(method, endpoint, content, isRetry: true);
             }
@@ -174,7 +218,7 @@ public class SpotifyClient
             {
                 if (response.Headers.RetryAfter?.Delta is TimeSpan retryAfter)
                 {
-                    Debug.WriteLine($"[SpotifyClient] Rate limited. Retry after: {retryAfter.TotalSeconds}s");
+                    Logger.Log($"[SpotifyClient] Rate limited. Retry after: {retryAfter.TotalSeconds}s");
                     await Task.Delay(retryAfter);
                     return await SendAuthenticatedRequestAsync(method, endpoint, content, isRetry: true);
                 }
@@ -184,7 +228,7 @@ public class SpotifyClient
         }
         catch (HttpRequestException ex)
         {
-            Debug.WriteLine($"[SpotifyClient] Request exception: {ex.Message}");
+            Logger.Log($"[SpotifyClient] Request exception: {ex.Message}");
             return null;
         }
     }
@@ -206,11 +250,11 @@ public class SpotifyClient
                 if (refreshed != null)
                 {
                     _tokens = refreshed;
-                    Debug.WriteLine("[SpotifyClient] Tokens refreshed successfully.");
+                    Logger.Log("[SpotifyClient] Tokens refreshed successfully.");
                 }
                 else
                 {
-                    Debug.WriteLine("[SpotifyClient] Token refresh failed.");
+                    Logger.Log("[SpotifyClient] Token refresh failed.");
                 }
             }
         }
@@ -219,4 +263,44 @@ public class SpotifyClient
             _refreshLock.Release();
         }
     }
+
+    /// <summary>
+    /// Gets the profile of the authorized user.
+    /// </summary>
+    public async Task<SpotifyUserProfile?> GetUserProfileAsync()
+    {
+        try
+        {
+            var response = await SendAuthenticatedRequestAsync(HttpMethod.Get, "/me");
+            if (response == null || !response.IsSuccessStatusCode)
+            {
+                Logger.Log($"[SpotifyClient] GetUserProfile failed: {response?.StatusCode}");
+                return null;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var profile = JsonSerializer.Deserialize<SpotifyUserProfile>(json);
+            return profile;
+        }
+        catch (Exception ex)
+        {
+            Logger.Log($"[SpotifyClient] GetUserProfile exception: {ex.Message}");
+            return null;
+        }
+    }
+}
+
+/// <summary>
+/// Represents the user's profile details.
+/// </summary>
+public class SpotifyUserProfile
+{
+    [System.Text.Json.Serialization.JsonPropertyName("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("display_name")]
+    public string DisplayName { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("product")]
+    public string? Product { get; set; }
 }
