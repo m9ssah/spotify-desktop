@@ -1,0 +1,27 @@
+# .NET build output
+bin/
+obj/
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.cache
+*.userosscache
+
+# Rider
+.idea/
+
+# NuGet
+*.nupkg
+packages/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Application settings (contains tokens)
+appsettings.local.json
+
+# Published output
+publish/
