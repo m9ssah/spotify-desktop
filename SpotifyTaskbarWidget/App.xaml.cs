@@ -2,7 +2,8 @@ using System.Diagnostics;
 using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
-using Hardcodet.Wpf.TaskbarNotification;
+using System.Windows.Threading;
+using Forms = System.Windows.Forms;
 using SpotifyTaskbarWidget.Interop;
 using SpotifyTaskbarWidget.Services;
 using SpotifyTaskbarWidget.Spotify;
@@ -18,8 +19,8 @@ namespace SpotifyTaskbarWidget;
 public partial class App : Application
 {
     // ─── Configuration ───────────────────────────────────────────────────
-    // TODO: Move to a settings file or environment variable
-    private const string SpotifyClientId = "b00d5b38887d4e9b9d7fb78df1cf86a2";
+    private static readonly string SpotifyClientId =
+        Config.Get("SPOTIFY_CLIENT_ID");
 
     // ─── Core Components ─────────────────────────────────────────────────
 
@@ -34,7 +35,8 @@ public partial class App : Application
     private SpotifyAuth? _spotifyAuth;
     private TokenStore? _tokenStore;
     private Window? _widgetWindow;
-    private Window? _dummyWindow;
+    private Thread? _trayThread;
+    private Dispatcher? _trayDispatcher;
     private WidgetViewModel? _viewModel;
     private HttpClient? _httpClient;
 
@@ -111,6 +113,13 @@ public partial class App : Application
             else
             {
                 Logger.Log("[App] Failed to fetch authorized user profile.");
+
+                _ = Dispatcher.BeginInvoke(() => MessageBox.Show(
+                    "Spotify rejected API access for this account (403 Forbidden).\n\n" +
+                    "If this app is in Development Mode, add this Spotify account's name and email " +
+                    "under Settings → User Management in the Spotify Developer Dashboard " +
+                    "(developer.spotify.com/dashboard), then use Re-authenticate from the tray menu.",
+                    "Spotify Access Denied", MessageBoxButton.OK, MessageBoxImage.Warning));
             }
         }
         catch (Exception ex)
@@ -123,21 +132,6 @@ public partial class App : Application
 
         // ── Create ViewModel ─────────────────────────────────────────
         _viewModel = new WidgetViewModel(_spotifyClient, _pollingService);
-
-        // ── Create Dummy Window for Tray Icon Focus ──────────────────
-        _dummyWindow = new Window
-        {
-            Width = 0,
-            Height = 0,
-            WindowStyle = WindowStyle.None,
-            ShowInTaskbar = false,
-            AllowsTransparency = true,
-            Background = System.Windows.Media.Brushes.Transparent,
-            Left = -9999,
-            Top = -9999,
-        };
-        _dummyWindow.Show();
-        MainWindow = _dummyWindow;
 
         // ── Create Widget Window ─────────────────────────────────────
         _widgetWindow = CreateWidgetWindow();
@@ -223,55 +217,90 @@ public partial class App : Application
     }
 
     // ─── System Tray Icon ────────────────────────────────────────────────
-
     private void SetupTrayIcon()
     {
-        if (_dummyWindow == null) return;
-        _trayIcon = new TaskbarNotificationIcon(_dummyWindow);
+        var ready = new ManualResetEventSlim();
 
-        // Context menu
-        var contextMenu = new ContextMenu();
-
-        var settingsItem = new MenuItem { Header = "Settings" };
-        settingsItem.Click += (s, e) => ShowSettings();
-        contextMenu.Items.Add(settingsItem);
-
-        var autoStartItem = new MenuItem
+        _trayThread = new Thread(() =>
         {
-            Header = "Start with Windows",
-            IsCheckable = true,
-            IsChecked = _startupService?.IsAutoStartEnabled ?? false
+            try
+            {
+                _trayDispatcher = Dispatcher.CurrentDispatcher;
+                _trayIcon = new TaskbarNotificationIcon
+                {
+                    ContextMenu = BuildTrayMenu(),
+                    ToolTipText = "Spotify Taskbar Widget",
+                    Visible = true,
+                };
+            }
+            catch (Exception ex)
+            {
+                // Never let this kill the process — the app is still usable without a tray icon.
+                Logger.Log($"[Tray] Tray icon setup failed: {ex}");
+                return;
+            }
+            finally
+            {
+                // Must always fire, or startup blocks forever on ready.Wait().
+                ready.Set();
+            }
+
+            Dispatcher.Run();
+        })
+        {
+            IsBackground = true,
+            Name = "TrayIcon",
+        };
+        _trayThread.SetApartmentState(ApartmentState.STA);
+        _trayThread.Start();
+        ready.Wait();
+    }
+
+    /// <summary>Runs an action on the main UI thread (menu handlers fire on the tray thread).</summary>
+    private void OnUiThread(Action action) => Dispatcher.BeginInvoke(action);
+
+    private Forms.ContextMenuStrip BuildTrayMenu()
+    {
+        var menu = new Forms.ContextMenuStrip();
+
+        var settingsItem = new Forms.ToolStripMenuItem("Settings");
+        settingsItem.Click += (s, e) => OnUiThread(ShowSettings);
+        menu.Items.Add(settingsItem);
+
+        var autoStartItem = new Forms.ToolStripMenuItem("Start with Windows")
+        {
+            Checked = _startupService?.IsAutoStartEnabled ?? false
         };
         autoStartItem.Click += (s, e) =>
         {
             _startupService?.ToggleAutoStart();
-            autoStartItem.IsChecked = _startupService?.IsAutoStartEnabled ?? false;
+            autoStartItem.Checked = _startupService?.IsAutoStartEnabled ?? false;
         };
-        contextMenu.Items.Add(autoStartItem);
+        menu.Items.Add(autoStartItem);
 
-        contextMenu.Items.Add(new Separator());
+        menu.Items.Add(new Forms.ToolStripSeparator());
 
-        var reauthItem = new MenuItem { Header = "Re-authenticate" };
-        reauthItem.Click += async (s, e) => await ReauthenticateAsync();
-        contextMenu.Items.Add(reauthItem);
+        var reauthItem = new Forms.ToolStripMenuItem("Re-authenticate");
+        reauthItem.Click += (s, e) => OnUiThread(() => _ = ReauthenticateAsync());
+        menu.Items.Add(reauthItem);
 
-        contextMenu.Items.Add(new Separator());
+        menu.Items.Add(new Forms.ToolStripSeparator());
 
-        var aboutItem = new MenuItem { Header = "About" };
-        aboutItem.Click += (s, e) =>
-        {
+        var aboutItem = new Forms.ToolStripMenuItem("About");
+        aboutItem.Click += (s, e) => OnUiThread(() =>
             MessageBox.Show("Spotify Taskbar Widget\nVersion 1.0\n\nEmbeds Spotify controls directly in your Windows 11 taskbar.",
-                "About", MessageBoxButton.OK, MessageBoxImage.Information);
+                "About", MessageBoxButton.OK, MessageBoxImage.Information));
+        menu.Items.Add(aboutItem);
+
+        var quitItem = new Forms.ToolStripMenuItem("Quit");
+        quitItem.Click += (s, e) =>
+        {
+            Logger.Log("[Tray] Quit clicked.");
+            OnUiThread(Shutdown);
         };
-        contextMenu.Items.Add(aboutItem);
+        menu.Items.Add(quitItem);
 
-        var quitItem = new MenuItem { Header = "Quit" };
-        quitItem.Click += (s, e) => Shutdown();
-        contextMenu.Items.Add(quitItem);
-
-        _trayIcon.ContextMenu = contextMenu;
-        _trayIcon.ToolTipText = "Spotify Taskbar Widget";
-        _trayIcon.Visibility = Visibility.Visible;
+        return menu;
     }
 
     // ─── Event Handlers ──────────────────────────────────────────────────
@@ -325,76 +354,74 @@ public partial class App : Application
         _taskbarHost?.Dispose();
         _shellHook?.Dispose();
         _themeService?.Dispose();
-        _trayIcon?.Dispose();
+
+        // The tray icon lives on its own thread — dispose it there so the icon is
+        // removed from the notification area instead of lingering as a ghost.
+        _trayDispatcher?.Invoke(() => _trayIcon?.Dispose());
+        _trayDispatcher?.InvokeShutdown();
+
         _httpClient?.Dispose();
         _singleInstanceMutex?.ReleaseMutex();
         _singleInstanceMutex?.Dispose();
         _widgetWindow?.Close();
-        _dummyWindow?.Close();
 
         base.OnExit(e);
     }
 }
 
 /// <summary>
-/// Lightweight wrapper around Hardcodet TaskbarIcon to handle the tray notification icon.
-/// Uses WPF-native approach instead of WinForms NotifyIcon.
+/// Wrapper around the WinForms NotifyIcon.
+/// WinForms is used rather than a WPF tray library because this icon is created on a
+/// non-main thread (see App.SetupTrayIcon), and WPF tray libraries touch
+/// Application.Current, which throws off the main thread.
 /// </summary>
 internal class TaskbarNotificationIcon : IDisposable
 {
-    private readonly TaskbarIcon _icon;
+    private readonly Forms.NotifyIcon _icon;
 
-    public TaskbarNotificationIcon(Window owner)
+    public TaskbarNotificationIcon()
     {
-        _icon = new TaskbarIcon();
+        _icon = new Forms.NotifyIcon { Icon = LoadIcon() };
+    }
 
-        // Attach the TaskbarIcon to the dummy window's visual tree.
-        // This gives the tray ContextMenu a valid top-level window parent
-        // so it can receive focus properly and won't flash/close instantly.
-        if (owner.Content is Panel panel)
-        {
-            panel.Children.Add(_icon);
-        }
-        else
-        {
-            var grid = new Grid();
-            grid.Children.Add(_icon);
-            owner.Content = grid;
-        }
-
-        // Try to load custom icon via WPF ImageSource
+    private static System.Drawing.Icon LoadIcon()
+    {
         try
         {
-            var iconUri = new Uri("pack://application:,,,/Assets/spotify-icon.ico", UriKind.Absolute);
-            var iconBitmap = new System.Windows.Media.Imaging.BitmapImage(iconUri);
-            _icon.IconSource = iconBitmap;
+            // The .ico is embedded as the executable's application icon.
+            var path = Environment.ProcessPath;
+            if (path != null)
+                return System.Drawing.Icon.ExtractAssociatedIcon(path) ?? System.Drawing.SystemIcons.Application;
         }
         catch
         {
-            // No custom icon available — Hardcodet will use a default
+            // Fall through to the stock icon.
         }
+        return System.Drawing.SystemIcons.Application;
     }
 
-    public ContextMenu? ContextMenu
+    public Forms.ContextMenuStrip? ContextMenu
     {
-        get => _icon.ContextMenu;
-        set => _icon.ContextMenu = value;
+        get => _icon.ContextMenuStrip;
+        set => _icon.ContextMenuStrip = value;
     }
 
-    public string? ToolTipText
+    public string ToolTipText
     {
-        get => _icon.ToolTipText;
-        set => _icon.ToolTipText = value;
+        get => _icon.Text;
+        set => _icon.Text = value;
     }
 
-    public Visibility Visibility
+    public bool Visible
     {
-        get => _icon.Visibility;
-        set => _icon.Visibility = value;
+        get => _icon.Visible;
+        set => _icon.Visible = value;
     }
 
     public void Dispose()
     {
+        // Hide before disposing, or the icon lingers in the tray as a ghost.
+        _icon.Visible = false;
         _icon.Dispose();
     }
 }
