@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <ApplicationIcon>Assets\spotify-icon.ico</ApplicationIcon>
     <AssemblyName>SpotifyTaskbarWidget</AssemblyName>
     <RootNamespace>SpotifyTaskbarWidget</RootNamespace>
@@ -16,12 +17,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="1.1.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="8.0.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Resource Include="Assets\spotify-icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include=".env" CopyToOutputDirectory="PreserveNewest" Condition="Exists('.env')" />
   </ItemGroup>
 
 </Project>

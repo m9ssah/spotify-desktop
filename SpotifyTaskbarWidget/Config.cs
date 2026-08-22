@@ -30,7 +30,6 @@ public static class Config
                     continue;
 
                 var key = trimmed[..separator].Trim();
-                // Strip surrounding quotes, which people habitually add.
                 var value = trimmed[(separator + 1)..].Trim().Trim('"', '\'');
                 values[key] = value;
             }

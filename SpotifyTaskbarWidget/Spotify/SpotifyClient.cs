@@ -125,51 +125,47 @@ public class SpotifyClient
 
     // ─── Playback Controls ───────────────────────────────────────────────
 
-    /// <summary>
-    /// Resumes playback on the active device.
-    /// </summary>
-    public async Task<bool> PlayAsync()
-    {
-        var response = await SendAuthenticatedRequestAsync(HttpMethod.Put, "/me/player/play");
-        return response?.IsSuccessStatusCode ?? false;
-    }
+    /// <summary>Resumes playback on the active device.</summary>
+    public Task<bool> PlayAsync() => ControlAsync(HttpMethod.Put, "/me/player/play");
+
+    /// <summary>Pauses playback on the active device.</summary>
+    public Task<bool> PauseAsync() => ControlAsync(HttpMethod.Put, "/me/player/pause");
+
+    /// <summary>Skips to the next track.</summary>
+    public Task<bool> NextTrackAsync() => ControlAsync(HttpMethod.Post, "/me/player/next");
+
+    /// <summary>Skips to the previous track.</summary>
+    public Task<bool> PreviousTrackAsync() => ControlAsync(HttpMethod.Post, "/me/player/previous");
+
+    /// <summary>Sets the volume (0–100).</summary>
+    public Task<bool> SetVolumeAsync(int volumePercent) => ControlAsync(HttpMethod.Put,
+        $"/me/player/volume?volume_percent={Math.Clamp(volumePercent, 0, 100)}");
 
     /// <summary>
-    /// Pauses playback on the active device.
+    /// Issues a playback control command. Failures here are otherwise invisible —
+    /// the button just does nothing — so the API's reason is logged.
+    /// Spotify returns 403 PREMIUM_REQUIRED for Free accounts and
+    /// 404 NO_ACTIVE_DEVICE when nothing is currently playing.
     /// </summary>
-    public async Task<bool> PauseAsync()
+    private async Task<bool> ControlAsync(HttpMethod method, string endpoint)
     {
-        var response = await SendAuthenticatedRequestAsync(HttpMethod.Put, "/me/player/pause");
-        return response?.IsSuccessStatusCode ?? false;
-    }
+        var response = await SendAuthenticatedRequestAsync(method, endpoint);
 
-    /// <summary>
-    /// Skips to the next track.
-    /// </summary>
-    public async Task<bool> NextTrackAsync()
-    {
-        var response = await SendAuthenticatedRequestAsync(HttpMethod.Post, "/me/player/next");
-        return response?.IsSuccessStatusCode ?? false;
-    }
+        if (response == null)
+        {
+            Logger.Log($"[SpotifyClient] Control {endpoint} failed: no response (no tokens or network error).");
+            return false;
+        }
 
-    /// <summary>
-    /// Skips to the previous track.
-    /// </summary>
-    public async Task<bool> PreviousTrackAsync()
-    {
-        var response = await SendAuthenticatedRequestAsync(HttpMethod.Post, "/me/player/previous");
-        return response?.IsSuccessStatusCode ?? false;
-    }
+        if (response.IsSuccessStatusCode)
+        {
+            Logger.Log($"[SpotifyClient] Control {endpoint} OK ({(int)response.StatusCode}).");
+            return true;
+        }
 
-    /// <summary>
-    /// Sets the volume (0–100).
-    /// </summary>
-    public async Task<bool> SetVolumeAsync(int volumePercent)
-    {
-        volumePercent = Math.Clamp(volumePercent, 0, 100);
-        var response = await SendAuthenticatedRequestAsync(HttpMethod.Put,
-            $"/me/player/volume?volume_percent={volumePercent}");
-        return response?.IsSuccessStatusCode ?? false;
+        var body = await response.Content.ReadAsStringAsync();
+        Logger.Log($"[SpotifyClient] Control {endpoint} failed: {(int)response.StatusCode} {response.StatusCode}. Body: {body}");
+        return false;
     }
 
     // ─── Authenticated Request Handler ───────────────────────────────────
