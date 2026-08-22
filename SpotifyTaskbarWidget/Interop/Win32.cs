@@ -2,13 +2,9 @@ using System.Runtime.InteropServices;
 
 namespace SpotifyTaskbarWidget.Interop;
 
-/// <summary>
-/// Win32 P/Invoke declarations for taskbar embedding and window management.
-/// </summary>
 internal static class Win32
 {
-    // ─── Window Discovery ────────────────────────────────────────────────
-
+    // discovery
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
 
@@ -16,16 +12,14 @@ internal static class Win32
     public static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter,
         string? lpszClass, string? lpszWindow);
 
-    // ─── Window Hierarchy ────────────────────────────────────────────────
-
+    // hierarchy
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr GetParent(IntPtr hWnd);
 
-    // ─── Window Styles ───────────────────────────────────────────────────
-
+    // styles
     [DllImport("user32.dll", SetLastError = true)]
     public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
@@ -39,8 +33,7 @@ internal static class Win32
     [DllImport("user32.dll", SetLastError = true, EntryPoint = "SetWindowLongPtr")]
     public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
-    // ─── Window Position / Size ──────────────────────────────────────────
-
+    // window position/size
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter,
@@ -55,8 +48,7 @@ internal static class Win32
     public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight,
         [MarshalAs(UnmanagedType.Bool)] bool bRepaint);
 
-    // ─── Window State ────────────────────────────────────────────────────
-
+    // window state
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool IsWindow(IntPtr hWnd);
@@ -69,15 +61,14 @@ internal static class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool InvalidateRect(IntPtr hWnd, IntPtr lpRect, bool bErase);
 
-    // ─── Messages ────────────────────────────────────────────────────────
-
+    // messages
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
 
     [DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     public static extern uint RegisterWindowMessage(string lpString);
 
-    // ─── Shell Hook ──────────────────────────────────────────────────────
+    // shell hook
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -87,8 +78,7 @@ internal static class Win32
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool DeregisterShellHookWindow(IntPtr hWnd);
 
-    // ─── DWM (Desktop Window Manager) ────────────────────────────────────
-
+    // DWM
     [DllImport("dwmapi.dll", PreserveSig = true)]
     public static extern int DwmSetWindowAttribute(IntPtr hwnd, DwmWindowAttribute dwAttribute,
         ref int pvAttribute, int cbAttribute);
@@ -96,8 +86,7 @@ internal static class Win32
     [DllImport("dwmapi.dll", PreserveSig = true)]
     public static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS pMarInset);
 
-    // ─── DPI ─────────────────────────────────────────────────────────────
-
+    // DPI
     [DllImport("user32.dll")]
     public static extern uint GetDpiForWindow(IntPtr hWnd);
 
@@ -108,13 +97,11 @@ internal static class Win32
     [DllImport("user32.dll")]
     public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
 
-    // ─── Constants: Window Style (GWL) ───────────────────────────────────
 
     public const int GWL_STYLE = -16;
     public const int GWL_EXSTYLE = -20;
 
-    // ─── Constants: Window Styles ────────────────────────────────────────
-
+    // window styles
     public const int WS_CHILD = 0x40000000;
     public const int WS_POPUP = unchecked((int)0x80000000);
     public const int WS_CAPTION = 0x00C00000;
@@ -123,16 +110,14 @@ internal static class Win32
     public const int WS_CLIPCHILDREN = 0x02000000;
     public const int WS_CLIPSIBLINGS = 0x04000000;
 
-    // ─── Constants: Extended Window Styles ────────────────────────────────
-
+    // extended window styles
     public const int WS_EX_APPWINDOW = 0x00040000;
     public const int WS_EX_TOOLWINDOW = 0x00000080;
     public const int WS_EX_LAYERED = 0x00080000;
     public const int WS_EX_TRANSPARENT = 0x00000020;
     public const int WS_EX_NOACTIVATE = 0x08000000;
 
-    // ─── Constants: SetWindowPos ──────────────────────────────────────────
-
+    // set window pos flags
     public static readonly IntPtr HWND_TOP = IntPtr.Zero;
     public static readonly IntPtr HWND_TOPMOST = new(-1);
 
@@ -143,28 +128,22 @@ internal static class Win32
     public const uint SWP_SHOWWINDOW = 0x0040;
     public const uint SWP_FRAMECHANGED = 0x0020;
 
-    // ─── Constants: ShowWindow ────────────────────────────────────────────
-
+    // show window 
     public const int SW_SHOW = 5;
     public const int SW_HIDE = 0;
 
-    // ─── Constants: Monitor ──────────────────────────────────────────────
-
+    //monitor
     public const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
 
-    // ─── Constants: Shell Hook ────────────────────────────────────────────
-
+    // shell hook
     public const int HSHELL_WINDOWCREATED = 1;
     public const int HSHELL_WINDOWDESTROYED = 2;
 
-    // ─── Constants: Messages ─────────────────────────────────────────────
-
+    // messages
     public const uint WM_SETTINGCHANGE = 0x001A;
     public const uint WM_THEMECHANGED = 0x031A;
     public const uint WM_DPICHANGED = 0x02E0;
     public const uint WM_DISPLAYCHANGE = 0x007E;
-
-    // ─── Enums ───────────────────────────────────────────────────────────
 
     public enum DwmWindowAttribute : uint
     {
@@ -172,8 +151,6 @@ internal static class Win32
         DWMWA_MICA_EFFECT = 1029,
         DWMWA_SYSTEMBACKDROP_TYPE = 38,
     }
-
-    // ─── Structs ─────────────────────────────────────────────────────────
 
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT

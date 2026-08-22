@@ -6,27 +6,22 @@ using Microsoft.Win32;
 
 namespace SpotifyTaskbarWidget.Services;
 
-/// <summary>
-/// Detects and monitors the Windows 11 system theme (dark/light mode, accent color).
-/// Listens for WM_SETTINGCHANGE to detect live theme switches.
-/// Provides resources that the widget UI binds to for native-looking styling.
-/// </summary>
+/// detects and monitors the Windows 11 system theme (dark/light mode, accent color)
+/// listens for WM_SETTINGCHANGE to detect live theme switches
+/// provides resources that the widget UI binds to for native-looking styling
 public class ThemeService : INotifyPropertyChangedBase, IDisposable
 {
-    // ─── Registry Paths ──────────────────────────────────────────────────
-
+    // registry keys for theme settings
     private const string PersonalizeKey = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
     private const string DwmKey = @"Software\Microsoft\Windows\DWM";
 
-    // ─── State ───────────────────────────────────────────────────────────
-
+    // state
     private bool _isDarkMode;
     private Color _accentColor;
     private bool _isAccentOnTaskbar;
     private HwndSource? _hwndSource;
 
-    // ─── Properties ──────────────────────────────────────────────────────
-
+    // properties
     public bool IsDarkMode
     {
         get => _isDarkMode;
@@ -45,28 +40,17 @@ public class ThemeService : INotifyPropertyChangedBase, IDisposable
         private set => SetProperty(ref _isAccentOnTaskbar, value);
     }
 
-    /// <summary>
-    /// Returns the appropriate foreground color based on theme.
-    /// </summary>
+
     public Color ForegroundColor => IsDarkMode ? Colors.White : Color.FromRgb(0x1A, 0x1A, 0x1A);
 
-    /// <summary>
-    /// Returns a subtle foreground color for secondary text (artist name).
-    /// </summary>
     public Color SecondaryForegroundColor => IsDarkMode
         ? Color.FromArgb(0xB3, 0xFF, 0xFF, 0xFF) // 70% white
         : Color.FromArgb(0xB3, 0x1A, 0x1A, 0x1A); // 70% dark
 
-    /// <summary>
-    /// Returns the button hover highlight color.
-    /// </summary>
     public Color HoverColor => IsDarkMode
         ? Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF) // 20% white
         : Color.FromArgb(0x33, 0x00, 0x00, 0x00); // 20% black
 
-    /// <summary>
-    /// Returns the taskbar background color.
-    /// </summary>
     public Color TaskbarBackgroundColor
     {
         get
@@ -75,21 +59,16 @@ public class ThemeService : INotifyPropertyChangedBase, IDisposable
                 return AccentColor;
 
             return IsDarkMode
-                ? Color.FromArgb(0x00, 0x00, 0x00, 0x00) // Transparent (let taskbar show through)
+                ? Color.FromArgb(0x00, 0x00, 0x00, 0x00)
                 : Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF);
         }
     }
 
-    // ─── Initialization ──────────────────────────────────────────────────
-
-    /// <summary>
-    /// Reads the current theme settings and starts monitoring for changes.
-    /// </summary>
     public void Initialize()
     {
         ReadThemeSettings();
 
-        // Register for WM_SETTINGCHANGE via a message-only window
+        // register for WM_SETTINGCHANGE via a message-only window
         var parameters = new HwndSourceParameters("SpotifyThemeMonitor")
         {
             Width = 0,
@@ -105,9 +84,6 @@ public class ThemeService : INotifyPropertyChangedBase, IDisposable
         Debug.WriteLine($"[ThemeService] Initialized: DarkMode={IsDarkMode}, AccentOnTaskbar={IsAccentOnTaskbar}");
     }
 
-    /// <summary>
-    /// Reads the current theme settings from the Windows registry.
-    /// </summary>
     private void ReadThemeSettings()
     {
         try
@@ -139,22 +115,19 @@ public class ThemeService : INotifyPropertyChangedBase, IDisposable
                 }
                 else
                 {
-                    AccentColor = Color.FromRgb(0x00, 0x78, 0xD4); // Default Windows blue
+                    AccentColor = Color.FromRgb(0x00, 0x78, 0xD4);
                 }
             }
         }
         catch (Exception ex)
         {
             Debug.WriteLine($"[ThemeService] Error reading theme: {ex.Message}");
-            // Default to dark mode
             IsDarkMode = true;
             AccentColor = Color.FromRgb(0x00, 0x78, 0xD4);
         }
     }
 
-    /// <summary>
-    /// Listens for WM_SETTINGCHANGE and WM_THEMECHANGED to detect theme switches.
-    /// </summary>
+    /// listens for WM_SETTINGCHANGE and WM_THEMECHANGED to detect theme switches.
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         uint message = (uint)msg;
@@ -164,16 +137,12 @@ public class ThemeService : INotifyPropertyChangedBase, IDisposable
             Debug.WriteLine("[ThemeService] Theme change detected, re-reading settings...");
             ReadThemeSettings();
 
-            // Notify the application to update resources
             UpdateApplicationResources();
         }
 
         return IntPtr.Zero;
     }
 
-    /// <summary>
-    /// Updates the application-level dynamic resources when theme changes.
-    /// </summary>
     public void UpdateApplicationResources()
     {
         var app = Application.Current;
@@ -196,10 +165,6 @@ public class ThemeService : INotifyPropertyChangedBase, IDisposable
         }
     }
 }
-
-/// <summary>
-/// Base class providing INotifyPropertyChanged support.
-/// </summary>
 public class INotifyPropertyChangedBase : System.ComponentModel.INotifyPropertyChanged
 {
     public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;

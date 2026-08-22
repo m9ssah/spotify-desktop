@@ -4,18 +4,11 @@ using Microsoft.Win32;
 
 namespace SpotifyTaskbarWidget.Services;
 
-/// <summary>
-/// Manages auto-start behavior via the Windows registry.
-/// Adds/removes an entry in HKCU\Software\Microsoft\Windows\CurrentVersion\Run.
-/// </summary>
 public class StartupService
 {
     private const string RegistryKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string AppName = "SpotifyTaskbarWidget";
 
-    /// <summary>
-    /// Returns true if auto-start is currently enabled.
-    /// </summary>
     public bool IsAutoStartEnabled
     {
         get
@@ -32,9 +25,6 @@ public class StartupService
         }
     }
 
-    /// <summary>
-    /// Enables auto-start by writing the current executable path to the registry.
-    /// </summary>
     public void EnableAutoStart()
     {
         try
@@ -50,9 +40,6 @@ public class StartupService
         }
     }
 
-    /// <summary>
-    /// Disables auto-start by removing the registry entry.
-    /// </summary>
     public void DisableAutoStart()
     {
         try
@@ -67,9 +54,6 @@ public class StartupService
         }
     }
 
-    /// <summary>
-    /// Toggles auto-start.
-    /// </summary>
     public void ToggleAutoStart()
     {
         if (IsAutoStartEnabled)

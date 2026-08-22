@@ -4,24 +4,12 @@ using SpotifyTaskbarWidget.Spotify;
 
 namespace SpotifyTaskbarWidget.Services;
 
-/// <summary>
-/// Adaptive polling engine for Spotify playback state.
-/// Adjusts polling frequency based on playback activity:
-///   - Active playback: every 1 second
-///   - Paused: every 10 seconds  
-///   - Idle (no player): every 30 seconds
-/// Uses exponential backoff on repeated API errors.
-/// </summary>
 public class PlaybackPollingService : IDisposable
 {
-    // ─── Polling Intervals ───────────────────────────────────────────────
-
     private static readonly TimeSpan ActiveInterval = TimeSpan.FromSeconds(1);
     private static readonly TimeSpan PausedInterval = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan IdleInterval = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan MaxBackoffInterval = TimeSpan.FromMinutes(2);
-
-    // ─── State ───────────────────────────────────────────────────────────
 
     private readonly SpotifyClient _client;
     private readonly DispatcherTimer _timer;
@@ -30,16 +18,8 @@ public class PlaybackPollingService : IDisposable
     private PlaybackState? _lastPlaybackState;
     private bool _isRunning;
 
-    // ─── Events ──────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Raised when the playback state changes (new track, play/pause, etc.).
-    /// </summary>
     public event EventHandler<PlaybackStateChangedEventArgs>? PlaybackStateChanged;
 
-    /// <summary>
-    /// Raised when the connection to Spotify is lost (repeated errors).
-    /// </summary>
     public event EventHandler? ConnectionLost;
 
     public PlaybackState? LastPlaybackState => _lastPlaybackState;
@@ -55,9 +35,6 @@ public class PlaybackPollingService : IDisposable
         _timer.Tick += OnTimerTick;
     }
 
-    /// <summary>
-    /// Starts the polling loop.
-    /// </summary>
     public void Start()
     {
         if (_isRunning)
@@ -65,14 +42,11 @@ public class PlaybackPollingService : IDisposable
 
         _isRunning = true;
         _consecutiveErrors = 0;
-        _timer.Interval = TimeSpan.FromMilliseconds(100); // First poll immediately
+        _timer.Interval = TimeSpan.FromMilliseconds(100);
         _timer.Start();
         Debug.WriteLine("[Polling] Started.");
     }
 
-    /// <summary>
-    /// Stops the polling loop.
-    /// </summary>
     public void Stop()
     {
         _isRunning = false;
@@ -80,17 +54,11 @@ public class PlaybackPollingService : IDisposable
         Logger.Log("[Polling] Stopped.");
     }
 
-    /// <summary>
-    /// Forces an immediate poll (e.g., after the user presses play/pause).
-    /// </summary>
     public async Task ForceRefreshAsync()
     {
-        // Brief delay to let Spotify process the command
         await Task.Delay(300);
         await PollAsync();
     }
-
-    // ─── Private ─────────────────────────────────────────────────────────
 
     private async void OnTimerTick(object? sender, EventArgs e)
     {
@@ -107,7 +75,6 @@ public class PlaybackPollingService : IDisposable
             var previousState = _lastPlaybackState;
             _lastPlaybackState = newState;
 
-            // Determine new polling state
             PollingState newPollingState;
             if (newState == null)
             {
@@ -122,7 +89,6 @@ public class PlaybackPollingService : IDisposable
                 newPollingState = PollingState.Paused;
             }
 
-            // Update timer interval if state changed
             if (newPollingState != _currentState)
             {
                 _currentState = newPollingState;
@@ -130,7 +96,6 @@ public class PlaybackPollingService : IDisposable
                 Logger.Log($"[Polling] State → {newPollingState}, Interval → {_timer.Interval.TotalSeconds}s");
             }
 
-            // Notify listeners if playback state meaningfully changed
             if (HasStateChanged(previousState, newState))
             {
                 PlaybackStateChanged?.Invoke(this, new PlaybackStateChangedEventArgs(newState, previousState));
@@ -146,7 +111,6 @@ public class PlaybackPollingService : IDisposable
                 ConnectionLost?.Invoke(this, EventArgs.Empty);
             }
 
-            // Exponential backoff on errors
             var backoff = TimeSpan.FromSeconds(Math.Min(
                 Math.Pow(2, _consecutiveErrors) * 2,
                 MaxBackoffInterval.TotalSeconds));
@@ -162,10 +126,6 @@ public class PlaybackPollingService : IDisposable
         _ => IdleInterval
     };
 
-    /// <summary>
-    /// Determines if the playback state has changed meaningfully
-    /// (ignoring minor progress changes during active playback).
-    /// </summary>
     private static bool HasStateChanged(PlaybackState? previous, PlaybackState? current)
     {
         if (previous == null && current == null)
@@ -193,9 +153,6 @@ public class PlaybackPollingService : IDisposable
     }
 }
 
-/// <summary>
-/// Event arguments for playback state changes.
-/// </summary>
 public class PlaybackStateChangedEventArgs : EventArgs
 {
     public PlaybackState? CurrentState { get; }
