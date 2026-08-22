@@ -22,6 +22,7 @@ public class TaskbarHost : IDisposable
     private bool _isEmbedded;
     private int _widgetWidth = 320;
     private int _widgetRightMargin = 8;
+    private (int X, int Y, int Width, int Height)? _lastPlacement;
 
     public event EventHandler? EmbeddingLost;
     public event EventHandler? EmbeddingRestored;
@@ -43,6 +44,7 @@ public class TaskbarHost : IDisposable
     public bool Embed(Window hostWindow)
     {
         _hostWindow = hostWindow;
+        _lastPlacement = null; // force a reposition after (re-)embedding
 
         Logger.Log("[TaskbarHost] Starting Embed sequence...");
         if (!DiscoverTaskbar())
@@ -215,8 +217,15 @@ public class TaskbarHost : IDisposable
         int y = verticalPadding;
         int height = taskbarHeight - (verticalPadding * 2);
 
+        // Skip if nothing changed — an unconditional SetWindowPos every timer tick
+        // steals activation, which dismisses any open context menu (e.g. the tray menu).
+        var placement = (x, y, scaledWidth, height);
+        if (placement == _lastPlacement)
+            return;
+        _lastPlacement = placement;
+
         Logger.Log($"[TaskbarHost] RepositionWidget: SetWindowPos to x={x}, y={y}, width={scaledWidth}, height={height} (Taskbar width={taskbarRect.Width}, height={taskbarHeight})");
-        Win32.SetWindowPos(_widgetHwnd, Win32.HWND_TOP, x, y, scaledWidth, height, Win32.SWP_SHOWWINDOW);
+        Win32.SetWindowPos(_widgetHwnd, Win32.HWND_TOP, x, y, scaledWidth, height, Win32.SWP_SHOWWINDOW | Win32.SWP_NOACTIVATE);
     }
 
     /// <summary>

@@ -21,8 +21,8 @@ packages/
 Thumbs.db
 .DS_Store
 
-# Application settings (contains tokens)
 appsettings.local.json
+.env
 
 # Published output
 publish/
