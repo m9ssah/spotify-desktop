@@ -3,18 +3,12 @@ using SpotifyTaskbarWidget.Spotify;
 
 namespace SpotifyTaskbarWidget.Views;
 
-/// <summary>
-/// Code-behind for the OAuth authentication window.
-/// Shows on first launch or when re-authentication is needed.
-/// </summary>
+/// oauth
 public partial class AuthWindow : Window
 {
     private readonly SpotifyAuth _auth;
     private TokenData? _resultTokens;
 
-    /// <summary>
-    /// The tokens obtained from authentication, or null if cancelled/failed.
-    /// </summary>
     public TokenData? ResultTokens => _resultTokens;
 
     public AuthWindow(SpotifyAuth auth)
@@ -38,7 +32,6 @@ public partial class AuthWindow : Window
                 _resultTokens = tokens;
                 StatusText.Text = "✓ Connected successfully!";
 
-                // Brief delay to show success message
                 await Task.Delay(800);
                 DialogResult = true;
                 Close();

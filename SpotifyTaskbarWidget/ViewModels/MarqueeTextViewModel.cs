@@ -4,10 +4,6 @@ using System.Windows.Threading;
 
 namespace SpotifyTaskbarWidget.ViewModels;
 
-/// <summary>
-/// Provides scrolling marquee behavior for text that overflows its container.
-/// Manages a TranslateTransform offset that the View binds to.
-/// </summary>
 public class MarqueeTextViewModel : INotifyPropertyChanged
 {
     private readonly DispatcherTimer _scrollTimer;
@@ -61,15 +57,13 @@ public class MarqueeTextViewModel : INotifyPropertyChanged
         _scrollTimer.Tick += OnScrollTick;
     }
 
-    /// <summary>
-    /// Called by the View when the text or container dimensions are measured.
-    /// </summary>
+    /// called by the View when the text or container dimensions are measured.
     public void UpdateDimensions(double textWidth, double containerWidth)
     {
         _textWidth = textWidth;
         _containerWidth = containerWidth;
 
-        bool shouldScroll = textWidth > containerWidth + 2; // 2px tolerance
+        bool shouldScroll = textWidth > containerWidth + 2;
         NeedsScroll = shouldScroll;
 
         if (shouldScroll && !_isScrolling)
@@ -86,7 +80,7 @@ public class MarqueeTextViewModel : INotifyPropertyChanged
     {
         _isScrolling = true;
         _direction = ScrollDirection.Left;
-        _pauseCounter = PauseTicks; // Pause at start
+        _pauseCounter = PauseTicks;
         ScrollOffset = 0;
         _scrollTimer.Start();
     }
@@ -101,7 +95,6 @@ public class MarqueeTextViewModel : INotifyPropertyChanged
     private void ResetScroll()
     {
         StopScroll();
-        // Dimensions will be re-measured by the View
     }
 
     private void OnScrollTick(object? sender, EventArgs e)
@@ -147,7 +140,7 @@ public class MarqueeTextViewModel : INotifyPropertyChanged
         Right
     }
 
-    // ─── INotifyPropertyChanged ──────────────────────────────────────────
+    // INotifyPropertyChanged
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

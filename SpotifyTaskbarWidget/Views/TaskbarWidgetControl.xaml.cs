@@ -5,10 +5,6 @@ using SpotifyTaskbarWidget.ViewModels;
 
 namespace SpotifyTaskbarWidget.Views;
 
-/// <summary>
-/// Code-behind for the TaskbarWidgetControl.
-/// Handles marquee text measurement and scroll updates.
-/// </summary>
 public partial class TaskbarWidgetControl : UserControl
 {
     private readonly MarqueeTextViewModel _marqueeVM;
@@ -20,7 +16,7 @@ public partial class TaskbarWidgetControl : UserControl
 
         _marqueeVM = new MarqueeTextViewModel();
 
-        // Subscribe to marquee scroll offset changes
+        // sub to marquee scroll offset changes
         _marqueeVM.PropertyChanged += (s, e) =>
         {
             if (e.PropertyName == nameof(MarqueeTextViewModel.ScrollOffset))
@@ -29,7 +25,7 @@ public partial class TaskbarWidgetControl : UserControl
             }
         };
 
-        // Periodically measure the track name text for marquee
+        // periodically measure the track name text for marquee
         _measureTimer = new DispatcherTimer
         {
             Interval = TimeSpan.FromMilliseconds(500)
@@ -65,7 +61,6 @@ public partial class TaskbarWidgetControl : UserControl
                 }
             };
 
-            // Initialize with current track name
             _marqueeVM.Text = vm.TrackName;
         }
     }
@@ -75,10 +70,6 @@ public partial class TaskbarWidgetControl : UserControl
         MeasureTrackName();
     }
 
-    /// <summary>
-    /// Measures the actual rendered width of the track name text and the container
-    /// to determine if marquee scrolling is needed.
-    /// </summary>
     private void MeasureTrackName()
     {
         if (TrackNameText == null)
@@ -87,7 +78,6 @@ public partial class TaskbarWidgetControl : UserControl
         TrackNameText.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var textWidth = TrackNameText.DesiredSize.Width;
 
-        // The parent Canvas is our container
         var containerWidth = TrackNameText.Parent is Canvas canvas ? canvas.ActualWidth : 0;
 
         if (containerWidth > 0)
